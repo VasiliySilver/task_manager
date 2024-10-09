@@ -89,6 +89,9 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DATABASE_URL=postgresql://user:password@db/taskdb
+      - SENDGRID_API_KEY=your_sendgrid_api_key
+    volumes:
+      - ./path/to/firebase-adminsdk.json:/app/firebase-adminsdk.json
     depends_on:
       - redis
       - db

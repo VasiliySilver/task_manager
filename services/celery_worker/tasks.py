@@ -1,9 +1,11 @@
 from celery_app import celery_app
+from task_models import User
 from sqlalchemy import create_engine, and_
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 import os
 import logging
+from notifications import send_email, send_push_notification
 
 # Настройка логгера
 logging.basicConfig(level=logging.INFO)
@@ -46,3 +48,21 @@ def create_notification(db, task):
     db.add(notification)
     db.commit()
     logger.info(f"Created notification for task {task.id}")
+
+    # Отправка email
+    user_email = db.query(User.email).filter(User.id == task.user_id).scalar()
+    if user_email:
+        send_email(
+            user_email,
+            "Task Due Soon",
+            f"Your task '{task.title}' is due in less than 24 hours!"
+        )
+
+    # Отправка push-уведомления
+    user_fcm_token = db.query(User.fcm_token).filter(User.id == task.user_id).scalar()
+    if user_fcm_token:
+        send_push_notification(
+            user_fcm_token,
+            "Task Due Soon",
+            f"Your task '{task.title}' is due in less than 24 hours!"
+        )

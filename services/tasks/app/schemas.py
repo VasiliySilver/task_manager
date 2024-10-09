@@ -92,3 +92,7 @@ class TaskSortField(str, Enum):
 class TaskSort(BaseModel):
     field: TaskSortField
     order: SortOrder = SortOrder.asc
+
+class UserUpdate(BaseModel):
+    email: Optional[str] = None
+    fcm_token: Optional[str] = None

@@ -24,3 +24,10 @@ class Notification(Base):
     message = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_read = Column(Boolean, default=False)
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    fcm_token = Column(String)  # Токен для Firebase Cloud Messaging
