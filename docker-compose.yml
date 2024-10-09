@@ -84,15 +84,24 @@ services:
       - notification-service
 
   celery-worker:
-    build:
-      context: ./services/notifications
-      dockerfile: celery_worker.dockerfile
+    build: ./services/celery_worker
     environment:
-      - DATABASE_URL=postgresql://user:password@postgres/taskdb
-      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=postgresql://user:password@db/taskdb
     depends_on:
-      - postgres
       - redis
+      - db
+
+  celery-beat:
+    build: ./services/celery_worker
+    command: celery -A celery_app beat --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - celery-worker
 
   prometheus:
     image: prom/prometheus

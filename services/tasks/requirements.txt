@@ -9,3 +9,4 @@ prometheus-fastapi-instrumentator==5.7.1
 python-json-logger==2.0.2
 elasticsearch==7.14.0
 redis==4.5.0
+celery==5.2.7
