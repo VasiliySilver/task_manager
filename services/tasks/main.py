@@ -1,9 +1,18 @@
 from fastapi import FastAPI
-from app.routes import router as tasks_router
+from prometheus_fastapi_instrumentator import Instrumentator
+from app.routes import router
+from app.elasticsearch import create_index
 
-app = FastAPI(title="Tasks Service", version="0.1.0")
+app = FastAPI(title="Task Service", version="0.1.0")
 
-app.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
+@app.on_event("startup")
+async def startup_event():
+    create_index()
+
+# Добавляем инструментацию Prometheus
+Instrumentator().instrument(app).expose(app)
+
+app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn

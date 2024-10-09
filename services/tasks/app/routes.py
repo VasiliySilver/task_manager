@@ -5,6 +5,7 @@ from typing import List
 from . import models, schemas, notifications, auth
 from .database import get_db
 from .logger import logger
+from .elasticsearch import search_tasks as es_search_tasks, index_task
 
 router = APIRouter()
 
@@ -21,6 +22,7 @@ async def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), c
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
+    index_task(db_task)  # Индексируем задачу в Elasticsearch
     await notifications.send_notification(current_user.username, f"New task created: {db_task.title}", 'task', db_task.id)
     logger.info(f"Task created successfully: {db_task.id}")
     return db_task
@@ -69,6 +71,7 @@ async def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depe
     
     db.commit()
     db.refresh(db_task)
+    index_task(db_task)  # Обновляем индекс в Elasticsearch
     await notifications.send_notification(db_task.user_id, f"Task updated: {db_task.title}", 'task', db_task.id)
     logger.info(f"Task {task_id} updated successfully")
     return db_task
@@ -82,6 +85,7 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Task not found")
     db.delete(db_task)
     db.commit()
+    # Удаление из Elasticsearch не требуется, так как документ будет автоматически удален при следующей индексации
     logger.info(f"Task {task_id} deleted successfully")
     return db_task
 
@@ -144,22 +148,20 @@ async def search_tasks(
 ):
     logger.info(f"Searching tasks with query: {query} and tags: {tags}")
     
-    search = f"%{query}%"
-    task_query = db.query(models.Task).filter(
-        or_(
-            models.Task.title.ilike(search),
-            models.Task.description.ilike(search)
-        )
-    )
+    # Используем Elasticsearch для поиска
+    es_result = es_search_tasks(query, tags, skip // limit + 1, limit)
+    
+    # Получаем задачи из базы данных по ID, найденным в Elasticsearch
+    task_ids = [hit['_id'] for hit in es_result['hits']['hits']]
+    tasks = db.query(models.Task).filter(models.Task.id.in_(task_ids)).all()
+    
+    # Сортируем задачи в том же порядке, что и результаты Elasticsearch
+    tasks_dict = {task.id: task for task in tasks}
+    sorted_tasks = [tasks_dict[int(task_id)] for task_id in task_ids if int(task_id) in tasks_dict]
 
-    if tags:
-        task_query = task_query.join(models.Task.tags).filter(models.Tag.name.in_(tags))
-
-    total = task_query.count()
-    tasks = task_query.offset(skip).limit(limit).all()
     return schemas.PaginatedResponse(
-        items=tasks,
-        total=total,
+        items=sorted_tasks,
+        total=es_result['hits']['total']['value'],
         page=skip // limit + 1,
         size=limit
     )
