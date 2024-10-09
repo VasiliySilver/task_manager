@@ -62,3 +62,10 @@ class TaskFilter(BaseModel):
 class TaskSearch(BaseModel):
     query: str
     tags: Optional[List[str]] = None
+
+class PaginatedResponse(BaseModel):
+    items: List
+    total: int
+    page: int
+    size: int
+    pages: int

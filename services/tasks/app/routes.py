@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from typing import List
 from . import models, schemas, notifications, auth
 from .database import get_db
@@ -25,11 +25,17 @@ async def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), c
     logger.info(f"Task created successfully: {db_task.id}")
     return db_task
 
-@router.get("/", response_model=List[schemas.Task])
+@router.get("/", response_model=schemas.PaginatedResponse[schemas.Task])
 def read_tasks(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     logger.info(f"Fetching tasks with skip={skip} and limit={limit}")
+    total = db.query(func.count(models.Task.id)).scalar()
     tasks = db.query(models.Task).offset(skip).limit(limit).all()
-    return tasks
+    return schemas.PaginatedResponse(
+        items=tasks,
+        total=total,
+        page=skip // limit + 1,
+        size=limit
+    )
 
 @router.get("/{task_id}", response_model=schemas.Task)
 def read_task(task_id: int, db: Session = Depends(get_db)):
@@ -94,17 +100,29 @@ async def create_comment(task_id: int, comment: schemas.CommentCreate, db: Sessi
     logger.info(f"Comment created successfully for task {task_id}")
     return db_comment
 
-@router.get("/{task_id}/comments", response_model=List[schemas.Comment])
+@router.get("/{task_id}/comments", response_model=schemas.PaginatedResponse[schemas.Comment])
 def read_task_comments(task_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     logger.info(f"Fetching comments for task {task_id} with skip={skip} and limit={limit}")
+    total = db.query(func.count(models.Comment.id)).filter(models.Comment.task_id == task_id).scalar()
     comments = db.query(models.Comment).filter(models.Comment.task_id == task_id).offset(skip).limit(limit).all()
-    return comments
+    return schemas.PaginatedResponse(
+        items=comments,
+        total=total,
+        page=skip // limit + 1,
+        size=limit
+    )
 
-@router.get("/tags", response_model=List[schemas.Tag])
+@router.get("/tags", response_model=schemas.PaginatedResponse[schemas.Tag])
 def read_tags(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     logger.info(f"Fetching tags with skip={skip} and limit={limit}")
+    total = db.query(func.count(models.Tag.id)).scalar()
     tags = db.query(models.Tag).offset(skip).limit(limit).all()
-    return tags
+    return schemas.PaginatedResponse(
+        items=tags,
+        total=total,
+        page=skip // limit + 1,
+        size=limit
+    )
 
 @router.get("/tags/all", response_model=List[schemas.Tag])
 async def get_all_tags(
@@ -115,10 +133,12 @@ async def get_all_tags(
     tags = db.query(models.Tag).all()
     return tags
 
-@router.get("/search", response_model=List[schemas.Task])
+@router.get("/search", response_model=schemas.PaginatedResponse[schemas.Task])
 async def search_tasks(
     query: str = Query(..., min_length=1),
     tags: List[str] = Query(None),
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db),
     current_user: auth.TokenData = Depends(auth.get_current_active_user)
 ):
@@ -135,12 +155,20 @@ async def search_tasks(
     if tags:
         task_query = task_query.join(models.Task.tags).filter(models.Tag.name.in_(tags))
 
-    tasks = task_query.all()
-    return tasks
+    total = task_query.count()
+    tasks = task_query.offset(skip).limit(limit).all()
+    return schemas.PaginatedResponse(
+        items=tasks,
+        total=total,
+        page=skip // limit + 1,
+        size=limit
+    )
 
-@router.post("/filter", response_model=List[schemas.Task])
+@router.post("/filter", response_model=schemas.PaginatedResponse[schemas.Task])
 async def filter_tasks(
     filter_params: schemas.TaskFilter,
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db),
     current_user: auth.TokenData = Depends(auth.get_current_active_user)
 ):
@@ -157,5 +185,11 @@ async def filter_tasks(
     if filter_params.tags:
         query = query.join(models.Task.tags).filter(models.Tag.name.in_(filter_params.tags))
 
-    tasks = query.all()
-    return tasks
+    total = query.count()
+    tasks = query.offset(skip).limit(limit).all()
+    return schemas.PaginatedResponse(
+        items=tasks,
+        total=total,
+        page=skip // limit + 1,
+        size=limit
+    )
