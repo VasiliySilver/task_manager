@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List
 from . import models, schemas, notifications, auth
 from .database import get_db
@@ -104,3 +105,57 @@ def read_tags(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     logger.info(f"Fetching tags with skip={skip} and limit={limit}")
     tags = db.query(models.Tag).offset(skip).limit(limit).all()
     return tags
+
+@router.get("/tags/all", response_model=List[schemas.Tag])
+async def get_all_tags(
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    logger.info("Fetching all tags")
+    tags = db.query(models.Tag).all()
+    return tags
+
+@router.get("/search", response_model=List[schemas.Task])
+async def search_tasks(
+    query: str = Query(..., min_length=1),
+    tags: List[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    logger.info(f"Searching tasks with query: {query} and tags: {tags}")
+    
+    search = f"%{query}%"
+    task_query = db.query(models.Task).filter(
+        or_(
+            models.Task.title.ilike(search),
+            models.Task.description.ilike(search)
+        )
+    )
+
+    if tags:
+        task_query = task_query.join(models.Task.tags).filter(models.Tag.name.in_(tags))
+
+    tasks = task_query.all()
+    return tasks
+
+@router.post("/filter", response_model=List[schemas.Task])
+async def filter_tasks(
+    filter_params: schemas.TaskFilter,
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    logger.info(f"Filtering tasks with params: {filter_params}")
+    
+    query = db.query(models.Task)
+
+    if filter_params.title:
+        query = query.filter(models.Task.title.ilike(f"%{filter_params.title}%"))
+    if filter_params.status:
+        query = query.filter(models.Task.status == filter_params.status)
+    if filter_params.priority:
+        query = query.filter(models.Task.priority == filter_params.priority)
+    if filter_params.tags:
+        query = query.join(models.Task.tags).filter(models.Tag.name.in_(filter_params.tags))
+
+    tasks = query.all()
+    return tasks

@@ -52,3 +52,13 @@ class Task(TaskBase):
 
     class Config:
         orm_mode = True
+
+class TaskFilter(BaseModel):
+    title: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+class TaskSearch(BaseModel):
+    query: str
+    tags: Optional[List[str]] = None

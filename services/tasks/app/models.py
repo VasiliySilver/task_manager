@@ -7,7 +7,8 @@ Base = declarative_base()
 
 task_tags = Table('task_tags', Base.metadata,
     Column('task_id', Integer, ForeignKey('tasks.id')),
-    Column('tag_id', Integer, ForeignKey('tags.id'))
+    Column('tag_id', Integer, ForeignKey('tags.id')),
+    Index('idx_task_tags', 'task_id', 'tag_id')
 )
 
 class Task(Base):
