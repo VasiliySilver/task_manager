@@ -1,4 +1,4 @@
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, desc, asc
 from sqlalchemy.orm import Session
 from . import models, schemas, cache
 from typing import List, Optional
@@ -7,7 +7,8 @@ import hashlib
 
 
 def generate_cache_key(query: str, tags: Optional[List[str]], status: Optional[str], priority: Optional[str], 
-                       from_date: Optional[datetime], to_date: Optional[datetime], user_id: int, page: int, size: int) -> str:
+                       from_date: Optional[datetime], to_date: Optional[datetime], user_id: int, page: int, size: int,
+                       sort: Optional[schemas.TaskSort]) -> str:
     """
     Generate a unique cache key based on search parameters.
     """
@@ -20,7 +21,8 @@ def generate_cache_key(query: str, tags: Optional[List[str]], status: Optional[s
         str(to_date) if to_date else '',
         str(user_id),
         str(page),
-        str(size)
+        str(size),
+        f"{sort.field.value}_{sort.order.value}" if sort else ''
     ]
     return hashlib.md5('|'.join(key_parts).encode()).hexdigest()
 
@@ -35,9 +37,10 @@ def search_tasks(
     to_date: Optional[datetime] = None,
     user_id: int = None,
     page: int = 1,
-    size: int = 10
+    size: int = 10,
+    sort: Optional[schemas.TaskSort] = None
 ):
-    cache_key = generate_cache_key(query, tags, status, priority, from_date, to_date, user_id, page, size)
+    cache_key = generate_cache_key(query, tags, status, priority, from_date, to_date, user_id, page, size, sort)
     cached_result = cache.get_cache(cache_key)
     
     if cached_result:
@@ -60,6 +63,17 @@ def search_tasks(
         task_query = task_query.filter(models.Task.due_date <= to_date)
     if user_id:
         task_query = task_query.filter(models.Task.user_id == user_id)
+
+    # Применяем сортировку
+    if sort:
+        sort_column = getattr(models.Task, sort.field.value)
+        if sort.order == schemas.SortOrder.desc:
+            task_query = task_query.order_by(desc(sort_column))
+        else:
+            task_query = task_query.order_by(asc(sort_column))
+    else:
+        # Сортировка по умолчанию
+        task_query = task_query.order_by(desc(models.Task.created_at))
 
     total = task_query.count()
     tasks = task_query.offset((page - 1) * size).limit(size).all()

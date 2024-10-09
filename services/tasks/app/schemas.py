@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional, Dict
+from enum import Enum
 
 class TagBase(BaseModel):
     name: str
@@ -75,3 +76,19 @@ class TaskStats(BaseModel):
     tasks_by_status: Dict[str, int]
     tasks_by_priority: Dict[str, int]
     overdue_tasks: int
+
+class SortOrder(str, Enum):
+    asc = "asc"
+    desc = "desc"
+
+class TaskSortField(str, Enum):
+    title = "title"
+    status = "status"
+    priority = "priority"
+    due_date = "due_date"
+    created_at = "created_at"
+    updated_at = "updated_at"
+
+class TaskSort(BaseModel):
+    field: TaskSortField
+    order: SortOrder = SortOrder.asc

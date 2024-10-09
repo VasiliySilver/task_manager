@@ -151,14 +151,20 @@ async def search_tasks(
     to_date: Optional[datetime] = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=100),
+    sort_field: Optional[schemas.TaskSortField] = Query(None),
+    sort_order: Optional[schemas.SortOrder] = Query(schemas.SortOrder.asc),
     db: Session = Depends(get_db),
     current_user: auth.TokenData = Depends(auth.get_current_active_user)
 ):
-    logger.info(f"Searching tasks with query: {query}, tags: {tags}, status: {status}, priority: {priority}, from_date: {from_date}, to_date: {to_date}, page: {page}, size: {size}")
+    logger.info(f"Searching tasks with query: {query}, tags: {tags}, status: {status}, priority: {priority}, "
+                f"from_date: {from_date}, to_date: {to_date}, page: {page}, size: {size}, "
+                f"sort_field: {sort_field}, sort_order: {sort_order}")
+    
+    sort = schemas.TaskSort(field=sort_field, order=sort_order) if sort_field else None
     
     tasks, total = crud.search_tasks(
         db, query, tags, status, priority, from_date, to_date, 
-        user_id=current_user.id, page=page, size=size
+        user_id=current_user.id, page=page, size=size, sort=sort
     )
     
     return {
