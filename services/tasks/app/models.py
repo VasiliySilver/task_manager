@@ -35,6 +35,20 @@ class Task(Base):
         Index('idx_task_due_date', 'due_date'),
     )
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'status': self.status,
+            'priority': self.priority,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'user_id': self.user_id,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'tags': [tag.name for tag in self.tags]
+        }
+
 class User(Base):
     __tablename__ = "users"
 

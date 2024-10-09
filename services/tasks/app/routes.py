@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import List, Optional
 from datetime import datetime
-from . import models, schemas, notifications, auth, crud
+from . import models, schemas, notifications, auth, crud, cache
 from .database import get_db
 from .logger import logger
 from .elasticsearch import search_tasks as es_search_tasks, index_task
@@ -27,6 +27,7 @@ async def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), c
     index_task(db_task)  # Индексируем задачу в Elasticsearch
     await notifications.send_notification(current_user.username, f"New task created: {db_task.title}", 'task', db_task.id)
     logger.info(f"Task created successfully: {db_task.id}")
+    cache.delete_cache(f"user_tasks:{current_user.id}")
     return db_task
 
 @router.get("/", response_model=schemas.PaginatedResponse[schemas.Task])
@@ -76,6 +77,7 @@ async def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depe
     index_task(db_task)  # Обновляем индекс в Elasticsearch
     await notifications.send_notification(db_task.user_id, f"Task updated: {db_task.title}", 'task', db_task.id)
     logger.info(f"Task {task_id} updated successfully")
+    cache.delete_cache(f"user_tasks:{current_user.id}")
     return db_task
 
 @router.delete("/{task_id}", response_model=schemas.Task)
