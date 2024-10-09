@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
-from typing import List
-from . import models, schemas, notifications, auth
+from typing import List, Optional
+from datetime import datetime
+from . import models, schemas, notifications, auth, crud
 from .database import get_db
 from .logger import logger
 from .elasticsearch import search_tasks as es_search_tasks, index_task
+from math import ceil
 
 router = APIRouter()
 
@@ -137,34 +139,33 @@ async def get_all_tags(
     tags = db.query(models.Tag).all()
     return tags
 
-@router.get("/search", response_model=schemas.PaginatedResponse[schemas.Task])
+@router.get("/search", response_model=schemas.PaginatedResponse)
 async def search_tasks(
     query: str = Query(..., min_length=1),
     tags: List[str] = Query(None),
-    skip: int = 0,
-    limit: int = 100,
+    status: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    from_date: Optional[datetime] = Query(None),
+    to_date: Optional[datetime] = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: auth.TokenData = Depends(auth.get_current_active_user)
 ):
-    logger.info(f"Searching tasks with query: {query} and tags: {tags}")
+    logger.info(f"Searching tasks with query: {query}, tags: {tags}, status: {status}, priority: {priority}, from_date: {from_date}, to_date: {to_date}, page: {page}, size: {size}")
     
-    # Используем Elasticsearch для поиска
-    es_result = es_search_tasks(query, tags, skip // limit + 1, limit)
-    
-    # Получаем задачи из базы данных по ID, найденным в Elasticsearch
-    task_ids = [hit['_id'] for hit in es_result['hits']['hits']]
-    tasks = db.query(models.Task).filter(models.Task.id.in_(task_ids)).all()
-    
-    # Сортируем задачи в том же порядке, что и результаты Elasticsearch
-    tasks_dict = {task.id: task for task in tasks}
-    sorted_tasks = [tasks_dict[int(task_id)] for task_id in task_ids if int(task_id) in tasks_dict]
-
-    return schemas.PaginatedResponse(
-        items=sorted_tasks,
-        total=es_result['hits']['total']['value'],
-        page=skip // limit + 1,
-        size=limit
+    tasks, total = crud.search_tasks(
+        db, query, tags, status, priority, from_date, to_date, 
+        user_id=current_user.id, page=page, size=size
     )
+    
+    return {
+        "items": tasks,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": ceil(total / size)
+    }
 
 @router.post("/filter", response_model=schemas.PaginatedResponse[schemas.Task])
 async def filter_tasks(
@@ -195,3 +196,26 @@ async def filter_tasks(
         page=skip // limit + 1,
         size=limit
     )
+
+@router.get("/stats", response_model=schemas.TaskStats)
+async def get_task_stats(
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    total_tasks = db.query(func.count(models.Task.id)).filter(models.Task.user_id == current_user.id).scalar()
+    tasks_by_status = db.query(
+        models.Task.status, func.count(models.Task.id)
+    ).filter(models.Task.user_id == current_user.id).group_by(models.Task.status).all()
+    tasks_by_priority = db.query(
+        models.Task.priority, func.count(models.Task.id)
+    ).filter(models.Task.user_id == current_user.id).group_by(models.Task.priority).all()
+    overdue_tasks = db.query(func.count(models.Task.id)).filter(
+        and_(models.Task.user_id == current_user.id, models.Task.due_date < func.now(), models.Task.status != 'completed')
+    ).scalar()
+
+    return {
+        "total_tasks": total_tasks,
+        "tasks_by_status": dict(tasks_by_status),
+        "tasks_by_priority": dict(tasks_by_priority),
+        "overdue_tasks": overdue_tasks
+    }

@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Table
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table, Index, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
-from datetime import datetime
+from sqlalchemy.sql import func
 
 Base = declarative_base()
 
@@ -15,18 +15,25 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
+    title = Column(String, nullable=False)
     description = Column(String)
-    status = Column(String)
-    priority = Column(String)
+    status = Column(String, nullable=False)
+    priority = Column(String, nullable=False)
     due_date = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     user = relationship("User", back_populates="tasks")
-    tags = relationship("Tag", secondary=task_tags, back_populates="tasks")
-    comments = relationship("Comment", back_populates="task")
+    tags = relationship("Tag", secondary="task_tags", back_populates="tasks")
+
+    __table_args__ = (
+        Index('idx_task_search', 
+              text('to_tsvector(\'english\', title || \' \' || coalesce(description, \'\'))'),
+              postgresql_using='gin'),
+        Index('idx_task_status_priority', 'status', 'priority'),
+        Index('idx_task_due_date', 'due_date'),
+    )
 
 class User(Base):
     __tablename__ = "users"

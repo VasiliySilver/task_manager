@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 class TagBase(BaseModel):
     name: str
@@ -69,3 +69,9 @@ class PaginatedResponse(BaseModel):
     page: int
     size: int
     pages: int
+
+class TaskStats(BaseModel):
+    total_tasks: int
+    tasks_by_status: Dict[str, int]
+    tasks_by_priority: Dict[str, int]
+    overdue_tasks: int
