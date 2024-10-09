@@ -15,6 +15,10 @@ celery_app.conf.beat_schedule = {
         'task': 'tasks.send_daily_summary',
         'schedule': crontab(hour=9, minute=0)  # Отправлять ежедневно в 9:00
     },
+    'activate-pending-tasks': {
+        'task': 'tasks.activate_pending_tasks',
+        'schedule': 300.0  # Выполнять каждые 5 минут
+    },
 }
 
 celery_app.conf.imports = ['tasks']

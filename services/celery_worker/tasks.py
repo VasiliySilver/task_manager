@@ -90,8 +90,43 @@ def send_daily_summary():
     finally:
         db.close()
 
+@celery_app.task
+def activate_pending_tasks():
+    db = SessionLocal()
+    try:
+        pending_tasks = get_pending_tasks(db)
+        for task in pending_tasks:
+            updated_task = check_and_update_delayed_task_status(db, task.id)
+            if updated_task.status == TaskStatus.active:
+                # Отправляем уведомление пользователю
+                user = db.query(User).filter(User.id == updated_task.user_id).first()
+                if user:
+                    message = f"Your delayed task '{updated_task.title}' has been activated."
+                    notification = Notification(
+                        user_id=user.id,
+                        task_id=updated_task.id,
+                        message=message,
+                        created_at=datetime.utcnow()
+                    )
+                    db.add(notification)
+                    
+                    if user.notification_settings['email']:
+                        send_email(user.email, "Delayed Task Activated", message)
+                    
+                    if user.notification_settings['push'] and user.fcm_token:
+                        send_push_notification(user.fcm_token, "Delayed Task Activated", message)
+        
+        db.commit()
+    finally:
+        db.close()
+
 # Добавим новую задачу в расписание Celery
 celery_app.conf.beat_schedule['send-daily-summary'] = {
     'task': 'tasks.send_daily_summary',
     'schedule': crontab(hour=9, minute=0)  # Отправлять ежедневно в 9:00
+}
+
+celery_app.conf.beat_schedule['activate-pending-tasks'] = {
+    'task': 'tasks.activate_pending_tasks',
+    'schedule': 300.0  # Выполнять каждые 5 минут
 }

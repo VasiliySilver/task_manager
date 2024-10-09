@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table, Index, text, Boolean, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table, Index, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -20,6 +20,7 @@ class Task(Base):
     status = Column(String, nullable=False)
     priority = Column(String, nullable=False)
     due_date = Column(DateTime)
+    start_date = Column(DateTime)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -53,18 +54,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
     fcm_token = Column(String)
-    is_active = Column(Boolean, default=True)
-    notification_settings = Column(JSON, default={
-        "email": True,
-        "push": True,
-        "due_soon": 24,  # Часы до срока для уведомления "скоро дедлайн"
-        "overdue": True,  # Уведомлять о просроченных задачах
-        "daily_summary": True  # Отправлять ежедневную сводку
-    })
+    username = Column(String, unique=True, index=True)
 
     tasks = relationship("Task", back_populates="user")
 

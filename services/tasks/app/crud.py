@@ -135,3 +135,86 @@ def mark_notification_as_read(db: Session, notification_id: int, user_id: int):
         notification.is_read = True
         db.commit()
     return notification
+
+def create_task(db: Session, task: schemas.TaskCreate, user_id: int):
+    db_task = models.Task(**task.dict(), user_id=user_id, created_at=datetime.utcnow())
+    if task.start_date and task.start_date > datetime.utcnow():
+        db_task.status = models.TaskStatus.pending
+    else:
+        db_task.status = models.TaskStatus.active
+    db.add(db_task)
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+
+def update_task(db: Session, task_id: int, task: schemas.TaskUpdate, user_id: int):
+    db_task = db.query(models.Task).filter(models.Task.id == task_id, models.Task.user_id == user_id).first()
+    if db_task:
+        update_data = task.dict(exclude_unset=True)
+        
+        # Особая обработка для start_date
+        if 'start_date' in update_data:
+            new_start_date = update_data['start_date']
+            if new_start_date and new_start_date > datetime.utcnow():
+                update_data['status'] = models.TaskStatus.pending
+            elif db_task.status == models.TaskStatus.pending:
+                update_data['status'] = models.TaskStatus.active
+        
+        for key, value in update_data.items():
+            setattr(db_task, key, value)
+        
+        db_task.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(db_task)
+    return db_task
+
+def get_pending_tasks(db: Session):
+    now = datetime.utcnow()
+    return db.query(models.Task).filter(
+        models.Task.status == models.TaskStatus.pending,
+        models.Task.start_date <= now
+    ).all()
+
+def create_delayed_task(db: Session, task: schemas.TaskCreate, user_id: int):
+    db_task = models.Task(**task.dict(), user_id=user_id, created_at=datetime.utcnow())
+    if task.start_date and task.start_date > datetime.utcnow():
+        db_task.status = models.TaskStatus.pending
+    else:
+        db_task.status = models.TaskStatus.active
+    db.add(db_task)
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+
+def update_delayed_task(db: Session, task_id: int, task: schemas.TaskUpdate, user_id: int):
+    db_task = db.query(models.Task).filter(
+        models.Task.id == task_id,
+        models.Task.user_id == user_id,
+        models.Task.status == models.TaskStatus.pending
+    ).first()
+    if db_task:
+        update_data = task.dict(exclude_unset=True)
+        
+        # Особая обра��отка для start_date
+        if 'start_date' in update_data:
+            new_start_date = update_data['start_date']
+            if new_start_date and new_start_date <= datetime.utcnow():
+                update_data['status'] = models.TaskStatus.active
+        
+        for key, value in update_data.items():
+            setattr(db_task, key, value)
+        
+        db_task.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(db_task)
+    return db_task
+
+def check_and_update_delayed_task_status(db: Session, task_id: int):
+    task = db.query(models.Task).filter(
+        models.Task.id == task_id,
+        models.Task.status == models.TaskStatus.pending
+    ).first()
+    if task and task.start_date <= datetime.utcnow():
+        task.status = models.TaskStatus.active
+        db.commit()
+    return task

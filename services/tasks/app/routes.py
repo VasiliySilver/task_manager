@@ -24,7 +24,7 @@ async def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), c
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
-    index_task(db_task)  # Индексируем задачу �� Elasticsearch
+    index_task(db_task)  # Индексируем задачу  Elasticsearch
     await notifications.send_notification(current_user.username, f"New task created: {db_task.title}", 'task', db_task.id)
     logger.info(f"Task created successfully: {db_task.id}")
     cache.delete_cache(f"user_tasks:{current_user.id}")
@@ -286,3 +286,23 @@ async def mark_notification_read(
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
     return notification
+
+@router.post("/tasks/delayed", response_model=schemas.Task)
+def create_delayed_task(
+    task: schemas.TaskCreate,
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    return crud.create_delayed_task(db=db, task=task, user_id=current_user.id)
+
+@router.put("/tasks/delayed/{task_id}", response_model=schemas.Task)
+def update_delayed_task(
+    task_id: int,
+    task: schemas.TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    updated_task = crud.update_delayed_task(db=db, task_id=task_id, task=task, user_id=current_user.id)
+    if updated_task is None:
+        raise HTTPException(status_code=404, detail="Delayed task not found")
+    return updated_task
