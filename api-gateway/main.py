@@ -1,8 +1,11 @@
 from fastapi import FastAPI, HTTPException, Request
+from prometheus_fastapi_instrumentator import Instrumentator
 from httpx import AsyncClient
 import os
 
 app = FastAPI(title="API Gateway")
+
+Instrumentator().instrument(app).expose(app)
 
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
 TASK_SERVICE_URL = os.getenv("TASK_SERVICE_URL", "http://task-service:8000")

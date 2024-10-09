@@ -13,3 +13,14 @@ async def send_notification(user_id: int, message: str):
             response.raise_for_status()
         except httpx.HTTPError as e:
             print(f"Error sending notification: {e}")
+
+async def send_project_notification(project_id: int, message: str):
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                f"{NOTIFICATION_SERVICE_URL}/notifications/project/{project_id}",
+                json={"message": message}
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            print(f"Error sending project notification: {e}")

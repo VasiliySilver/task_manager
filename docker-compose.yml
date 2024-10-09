@@ -18,6 +18,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://user:password@postgres/taskdb
       - SECRET_KEY=your-secret-key
+      - LOG_LEVEL=INFO
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5000
     depends_on:
       - postgres
 
@@ -26,6 +29,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://user:password@postgres/taskdb
       - NOTIFICATION_SERVICE_URL=http://notification-service:8000
+      - LOG_LEVEL=INFO
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5000
     depends_on:
       - postgres
       - notification-service
@@ -35,6 +41,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://user:password@postgres/taskdb
       - NOTIFICATION_SERVICE_URL=http://notification-service:8000
+      - LOG_LEVEL=INFO
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5000
     depends_on:
       - postgres
       - notification-service
@@ -44,6 +53,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://user:password@postgres/taskdb
       - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5000
     depends_on:
       - postgres
       - redis
@@ -72,6 +84,41 @@ services:
     depends_on:
       - postgres
       - redis
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - auth-service
+      - task-service
+      - project-service
+      - notification-service
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+    environment:
+      - discovery.type=single-node
+    ports:
+      - "9200:9200"
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.14.0
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    ports:
+      - "5000:5000"
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.14.0
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
 
 volumes:
   postgres_data:

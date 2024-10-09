@@ -3,8 +3,10 @@ from datetime import datetime
 from typing import Optional
 
 class NotificationBase(BaseModel):
-    user_id: int
+    user_id: str
     message: str
+    type: str
+    related_id: int
 
 class NotificationCreate(NotificationBase):
     pass
