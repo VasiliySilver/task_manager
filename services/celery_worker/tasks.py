@@ -39,30 +39,59 @@ def check_due_tasks():
         db.close()
 
 def create_notification(db, task):
-    notification = Notification(
-        user_id=task.user_id,
-        task_id=task.id,
-        message=f"Task '{task.title}' is due in less than 24 hours!",
-        created_at=datetime.utcnow()
-    )
-    db.add(notification)
-    db.commit()
-    logger.info(f"Created notification for task {task.id}")
+    user = db.query(User).filter(User.id == task.user_id).first()
+    if not user:
+        logger.error(f"User not found for task {task.id}")
+        return
 
-    # Отправка email
-    user_email = db.query(User.email).filter(User.id == task.user_id).scalar()
-    if user_email:
-        send_email(
-            user_email,
-            "Task Due Soon",
-            f"Your task '{task.title}' is due in less than 24 hours!"
-        )
+    notification_settings = user.notification_settings
+    hours_until_due = (task.due_date - datetime.utcnow()).total_seconds() / 3600
 
-    # Отправка push-уведомления
-    user_fcm_token = db.query(User.fcm_token).filter(User.id == task.user_id).scalar()
-    if user_fcm_token:
-        send_push_notification(
-            user_fcm_token,
-            "Task Due Soon",
-            f"Your task '{task.title}' is due in less than 24 hours!"
+    if hours_until_due <= notification_settings['due_soon']:
+        message = f"Task '{task.title}' is due in less than {notification_settings['due_soon']} hours!"
+        notification = Notification(
+            user_id=user.id,
+            task_id=task.id,
+            message=message,
+            created_at=datetime.utcnow()
         )
+        db.add(notification)
+        db.commit()
+        logger.info(f"Created notification for task {task.id}")
+
+        if notification_settings['email']:
+            send_email(user.email, "Task Due Soon", message)
+
+        if notification_settings['push'] and user.fcm_token:
+            send_push_notification(user.fcm_token, "Task Due Soon", message)
+
+@celery_app.task
+def send_daily_summary():
+    db = SessionLocal()
+    try:
+        users = db.query(User).filter(User.notification_settings['daily_summary'].astext == 'true').all()
+        for user in users:
+            tasks = db.query(Task).filter(
+                Task.user_id == user.id,
+                Task.due_date <= datetime.utcnow() + timedelta(days=1),
+                Task.status != 'completed'
+            ).all()
+            
+            if tasks:
+                message = "Your tasks due in the next 24 hours:\n"
+                for task in tasks:
+                    message += f"- {task.title}\n"
+                
+                if user.notification_settings['email']:
+                    send_email(user.email, "Daily Task Summary", message)
+                
+                if user.notification_settings['push'] and user.fcm_token:
+                    send_push_notification(user.fcm_token, "Daily Task Summary", message)
+    finally:
+        db.close()
+
+# Добавим новую задачу в расписание Celery
+celery_app.conf.beat_schedule['send-daily-summary'] = {
+    'task': 'tasks.send_daily_summary',
+    'schedule': crontab(hour=9, minute=0)  # Отправлять ежедневно в 9:00
+}

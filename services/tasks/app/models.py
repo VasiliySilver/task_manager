@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table, Index, text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Table, Index, text, Boolean, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -53,9 +53,18 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    fcm_token = Column(String)
     username = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    fcm_token = Column(String)
+    is_active = Column(Boolean, default=True)
+    notification_settings = Column(JSON, default={
+        "email": True,
+        "push": True,
+        "due_soon": 24,  # Часы до срока для уведомления "скоро дедлайн"
+        "overdue": True,  # Уведомлять о просроченных задачах
+        "daily_summary": True  # Отправлять ежедневную сводку
+    })
 
     tasks = relationship("Task", back_populates="user")
 

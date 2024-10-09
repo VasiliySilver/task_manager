@@ -96,3 +96,21 @@ class TaskSort(BaseModel):
 class UserUpdate(BaseModel):
     email: Optional[str] = None
     fcm_token: Optional[str] = None
+    notification_settings: Optional[NotificationSettings] = None
+
+class NotificationSettings(BaseModel):
+    email: bool = True
+    push: bool = True
+    due_soon: int = 24
+    overdue: bool = True
+    daily_summary: bool = True
+
+class User(BaseModel):
+    id: int
+    username: str
+    email: str
+    is_active: bool
+    notification_settings: NotificationSettings
+
+    class Config:
+        orm_mode = True
