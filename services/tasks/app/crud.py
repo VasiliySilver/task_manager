@@ -85,3 +85,53 @@ def search_tasks(
     cache.set_cache(cache_key, result, expiration=300)  # Кэшируем на 5 минут
 
     return tasks, total
+
+def get_user_notifications(db: Session, user_id: int, skip: int = 0, limit: int = 100):
+    return db.query(models.Notification)\
+        .filter(models.Notification.user_id == user_id)\
+        .order_by(models.Notification.created_at.desc())\
+        .offset(skip).limit(limit).all()
+
+def get_notification_summary(db: Session, user_id: int):
+    total = db.query(func.count(models.Notification.id))\
+        .filter(models.Notification.user_id == user_id).scalar()
+    unread = db.query(func.count(models.Notification.id))\
+        .filter(models.Notification.user_id == user_id)\
+        .filter(models.Notification.is_read == False).scalar()
+    return {"total": total, "unread": unread}
+
+def get_dashboard_summary(db: Session, user_id: int):
+    now = datetime.utcnow()
+    today = now.date()
+    week_ago = now - timedelta(days=7)
+
+    notifications = get_notification_summary(db, user_id)
+    tasks_due_today = db.query(func.count(models.Task.id))\
+        .filter(models.Task.user_id == user_id)\
+        .filter(func.date(models.Task.due_date) == today)\
+        .filter(models.Task.status != 'completed').scalar()
+    tasks_overdue = db.query(func.count(models.Task.id))\
+        .filter(models.Task.user_id == user_id)\
+        .filter(models.Task.due_date < now)\
+        .filter(models.Task.status != 'completed').scalar()
+    tasks_completed_this_week = db.query(func.count(models.Task.id))\
+        .filter(models.Task.user_id == user_id)\
+        .filter(models.Task.status == 'completed')\
+        .filter(models.Task.updated_at >= week_ago).scalar()
+
+    return schemas.DashboardSummary(
+        notifications=schemas.NotificationSummary(**notifications),
+        tasks_due_today=tasks_due_today,
+        tasks_overdue=tasks_overdue,
+        tasks_completed_this_week=tasks_completed_this_week
+    )
+
+def mark_notification_as_read(db: Session, notification_id: int, user_id: int):
+    notification = db.query(models.Notification)\
+        .filter(models.Notification.id == notification_id)\
+        .filter(models.Notification.user_id == user_id)\
+        .first()
+    if notification:
+        notification.is_read = True
+        db.commit()
+    return notification

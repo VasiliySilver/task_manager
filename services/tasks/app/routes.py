@@ -24,7 +24,7 @@ async def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), c
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
-    index_task(db_task)  # Индексируем задачу в Elasticsearch
+    index_task(db_task)  # Индексируем задачу �� Elasticsearch
     await notifications.send_notification(current_user.username, f"New task created: {db_task.title}", 'task', db_task.id)
     logger.info(f"Task created successfully: {db_task.id}")
     cache.delete_cache(f"user_tasks:{current_user.id}")
@@ -258,3 +258,31 @@ async def read_user(
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
+
+@router.get("/dashboard", response_model=schemas.DashboardSummary)
+async def get_dashboard(
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    return crud.get_dashboard_summary(db, current_user.id)
+
+@router.get("/notifications", response_model=List[schemas.NotificationRead])
+async def read_notifications(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    notifications = crud.get_user_notifications(db, current_user.id, skip=skip, limit=limit)
+    return notifications
+
+@router.put("/notifications/{notification_id}/read", response_model=schemas.NotificationRead)
+async def mark_notification_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: auth.TokenData = Depends(auth.get_current_active_user)
+):
+    notification = crud.mark_notification_as_read(db, notification_id, current_user.id)
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return notification

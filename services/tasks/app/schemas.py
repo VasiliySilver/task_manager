@@ -114,3 +114,23 @@ class User(BaseModel):
 
     class Config:
         orm_mode = True
+
+class NotificationRead(BaseModel):
+    id: int
+    message: str
+    created_at: datetime
+    is_read: bool
+    task_id: int
+
+    class Config:
+        orm_mode = True
+
+class NotificationSummary(BaseModel):
+    total: int
+    unread: int
+
+class DashboardSummary(BaseModel):
+    notifications: NotificationSummary
+    tasks_due_today: int
+    tasks_overdue: int
+    tasks_completed_this_week: int
